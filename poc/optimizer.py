@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pickle
 import warnings
-from typing import Any, Dict, Tuple
+from typing import Any, Dict
 
 import numpy as np
 import optuna
@@ -34,134 +34,91 @@ class MultiDatasetHyperparameterOptimization:
         self.results: Dict[str, Dict[str, Any]] = {}
         self.trial_results: Dict[str, list[dict[str, Any]]] = {}
 
-    def _apply_global_transform(self, value: Any, config: Dict[str, Any]) -> Any:
-        transform = config.get("transform")
-        if transform == "pow2":
-            return float(np.power(2.0, value))
-        return value
-
-    def _build_dataset_params(
-        self,
-        model_name: str,
-        params: Dict[str, Any],
-        raw_params: Dict[str, Any],
-        X: np.ndarray,
-    ) -> Dict[str, Any]:
-        param_configs = self.ml_models[model_name]["hyperparameters"]
-        dataset_params: Dict[str, Any] = {}
-
-        for param_name, config in param_configs.items():
-            value = params[param_name]
-            dataset_transform = config.get("dataset_transform")
-            if dataset_transform == "max_features":
-                features = X.shape[1]
-                fraction = float(np.clip(value, 0.0, 1.0))
-                candidate = int(np.ceil(fraction * features))
-                candidate = max(1, min(features, candidate))
-                dataset_params[param_name] = candidate
-            elif dataset_transform == "min_samples_leaf_n_power":
-                exponent_source = config.get("dataset_transform_source", "value")
-                base_value = raw_params.get(param_name, value) if exponent_source == "raw" else value
-                exponent = float(np.clip(base_value, 0.0, 1.0))
-                n_samples = X.shape[0]
-                candidate = int(np.round(np.power(n_samples, exponent)))
-                candidate = max(1, min(n_samples, candidate))
-                dataset_params[param_name] = candidate
-            else:
-                dataset_params[param_name] = value
-
-        if model_name == "ranger":
-            bootstrap = dataset_params.get("bootstrap", True)
-            if not bootstrap:
-                dataset_params["max_samples"] = None
-            else:
-                max_samples = dataset_params.get("max_samples")
-                if max_samples is not None:
-                    dataset_params["max_samples"] = float(np.clip(max_samples, 0.1, 1.0))
-
-        return dataset_params
-
-    def _sample_model_params(
-        self, trial: optuna.Trial, model_name: str
-    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        param_configs = self.ml_models[model_name]["hyperparameters"]
-        params: Dict[str, Any] = {}
-        raw_params: Dict[str, Any] = {}
-
-        for param_name, config in param_configs.items():
-            if config["type"] == "categorical":
-                value = trial.suggest_categorical(param_name, config["choices"])
-            elif config["type"] == "float":
-                value = trial.suggest_float(
-                    param_name,
-                    config["low"],
-                    config["high"],
-                    log=config.get("log", False),
-                )
-            elif config["type"] == "int":
-                value = trial.suggest_int(
-                    param_name,
-                    config["low"],
-                    config["high"],
-                )
-            else:  # pragma: no cover - guard
-                raise ValueError(f"Unsupported hyperparameter type: {config['type']}")
-
-            raw_params[param_name] = value
-            params[param_name] = self._apply_global_transform(value, config)
-
-        return params, raw_params
-
     def _create_model_pipeline(self, model_name: str, params: Dict[str, Any]) -> Pipeline:
         from sklearn.preprocessing import StandardScaler
 
-        model_entry = self.ml_models[model_name]
-        model_class = model_entry["class"]
-        init_params = model_entry.get("init_params", {})
-        model_kwargs = {**init_params, **params}
+        model_class = self.ml_models[model_name]["class"]
+        if model_name in ["svm", "logistic"]:
+            return Pipeline([("scaler", StandardScaler()), ("model", model_class(**params))])
+        return Pipeline([( "model", model_class(**params))])
 
-        if model_entry.get("scale"):
-            return Pipeline([("scaler", StandardScaler()), ("model", model_class(**model_kwargs))])
-        return Pipeline([("model", model_class(**model_kwargs))])
-
-    def _build_grid_search_space(self, model_name: str) -> Dict[str, list[Any]]:
+    def _build_grid_search_space(self, model_name: str, n_trials: int) -> Dict[str, list[Any]]:
+        """Build grid search space that samples roughly n_trials configurations"""
         search_space: Dict[str, list[Any]] = {}
-        param_configs = self.ml_models[model_name]["hyperparameters"]
+        model_config = self.ml_models[model_name]["hyperparameters"]
+        
+        # Count how many parameters we have
+        n_params = len(model_config)
+        if n_params == 0:
+            return search_space
+        
+        # Calculate how many values per parameter to roughly match n_trials
+        # For n_params dimensions with k values each: k^n_params ≈ n_trials
+        # So k ≈ n_trials^(1/n_params)
+        values_per_param = max(2, int(n_trials ** (1.0 / n_params)))
 
-        for param_name, config in param_configs.items():
-            if "grid_values" in config:
-                search_space[param_name] = list(config["grid_values"])
-                continue
-
-            if config["type"] == "categorical":
-                search_space[param_name] = list(config["choices"])
-            elif config["type"] == "int":
-                low, high = config["low"], config["high"]
-                if high - low <= 20:
-                    search_space[param_name] = list(range(low, high + 1))
+        for param_name, param_config in model_config.items():
+            if param_config["type"] == "categorical":
+                search_space[param_name] = list(param_config["choices"])
+            elif param_config["type"] == "int":
+                if "choices" in param_config:
+                    search_space[param_name] = list(param_config["choices"])
                 else:
-                    steps = config.get("grid_steps", 5)
-                    values = np.linspace(low, high, steps)
-                    ints = sorted({int(round(v)) for v in values})
-                    search_space[param_name] = [max(low, min(high, val)) for val in ints]
-            elif config["type"] == "float":
-                low, high = config["low"], config["high"]
-                steps = config.get("grid_steps", 5)
-                values = np.linspace(low, high, steps)
-                search_space[param_name] = [float(v) for v in values]
+                    low = param_config["low"]
+                    high = param_config["high"]
+                    step = max(1, (high - low) // (values_per_param - 1))
+                    search_space[param_name] = list(range(low, high + 1, step))[:values_per_param]
+            elif param_config["type"] == "float":
+                if "choices" in param_config:
+                    search_space[param_name] = list(param_config["choices"])
+                else:
+                    if param_config.get("log", False):
+                        # For log scale, use logspace
+                        values = np.logspace(
+                            np.log10(param_config["low"]),
+                            np.log10(param_config["high"]),
+                            values_per_param
+                        )
+                    else:
+                        values = np.linspace(
+                            param_config["low"],
+                            param_config["high"],
+                            values_per_param
+                        )
+                    search_space[param_name] = [float(value) for value in values]
 
         return search_space
 
     def _objective(self, trial: optuna.Trial, model_name: str, study_key: str) -> float:
-        params, raw_params = self._sample_model_params(trial, model_name)
+        model_config = self.ml_models[model_name]
+        params: Dict[str, Any] = {}
+
+        for param_name, param_config in model_config["hyperparameters"].items():
+            if param_config["type"] == "categorical":
+                params[param_name] = trial.suggest_categorical(
+                    param_name, param_config["choices"]
+                )
+            elif param_config["type"] == "float":
+                params[param_name] = trial.suggest_float(
+                    param_name,
+                    param_config["low"],
+                    param_config["high"],
+                    log=param_config.get("log", False),
+                )
+            elif param_config["type"] == "int":
+                params[param_name] = trial.suggest_int(
+                    param_name,
+                    param_config["low"],
+                    param_config["high"],
+                    log=param_config.get("log", False),
+                )
 
         dataset_results: Dict[str, float] = {}
         scores: list[float] = []
 
         try:
             for dataset_id, (X, y) in self.datasets.items():
-                dataset_params = self._build_dataset_params(model_name, params, raw_params, X)
-                pipeline = self._create_model_pipeline(model_name, dataset_params)
+                pipeline = self._create_model_pipeline(model_name, params)
                 cv_scores = cross_val_score(
                     pipeline, X, y, cv=5, scoring="accuracy", n_jobs=-1
                 )
@@ -176,7 +133,6 @@ class MultiDatasetHyperparameterOptimization:
             trial_data = {
                 "trial_number": trial.number,
                 "params": params.copy(),
-                "raw_params": raw_params.copy(),
                 "mean_score": mean_score,
                 "dataset_results": dataset_results.copy(),
                 "dataset_usage_percent": self.dataset_usage_percent,
@@ -199,7 +155,6 @@ class MultiDatasetHyperparameterOptimization:
             trial_data = {
                 "trial_number": trial.number,
                 "params": params.copy(),
-                "raw_params": raw_params.copy(),
                 "mean_score": 0.0,
                 "dataset_results": {
                     str(dataset_id): 0.0 for dataset_id in self.datasets.keys()
@@ -226,7 +181,7 @@ class MultiDatasetHyperparameterOptimization:
         elif sampling_method == "random":
             sampler = optuna.samplers.RandomSampler(seed=42)
         elif sampling_method == "grid":
-            search_space = self._build_grid_search_space(model_name)
+            search_space = self._build_grid_search_space(model_name, n_trials)
             sampler = optuna.samplers.GridSampler(search_space, seed=42)
         else:  # pragma: no cover - caller guard
             raise ValueError(f"Unknown sampling method: {sampling_method}")
