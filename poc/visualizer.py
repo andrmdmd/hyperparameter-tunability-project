@@ -42,6 +42,7 @@ def plot_convergence(
     sampling_method: Optional[str] = None,
     save_path: Optional[str] = None,
     metric: str = "auc",
+    show: bool = False,
 ) -> None:
     if not hasattr(optimizer, "complete_results"):
         print("No results available. Run optimization first.")
@@ -147,13 +148,16 @@ def plot_convergence(
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"Plot saved to {save_path}")
-    plt.show()
+
+    if show:
+        plt.show()
 
 
 def plot_comparative_convergence(
     optimizer: MultiDatasetHyperparameterOptimization,
     save_path: Optional[str] = None,
     metric: str = "auc",
+    show: bool = False,
 ) -> None:
     if not hasattr(optimizer, "complete_results"):
         print("No results available. Run optimization first.")
@@ -236,4 +240,6 @@ def plot_comparative_convergence(
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"Comparative plot saved to {save_path}")
-    plt.show()
+    
+    if show:
+        plt.show()

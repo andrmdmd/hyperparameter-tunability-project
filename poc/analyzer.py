@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Optional
 
 import pandas as pd
 
@@ -7,6 +8,7 @@ from optimizer import MultiDatasetHyperparameterOptimization
 
 def analyze_tunability(
     optimizer: MultiDatasetHyperparameterOptimization,
+    save_path: Optional[str] = None,
 ) -> pd.DataFrame:
     if not hasattr(optimizer, "complete_results"):
         print("No results available. Run optimization first.")
@@ -70,6 +72,8 @@ def analyze_tunability(
             rows.extend(dataset_rows)
             
     df = pd.DataFrame(rows)
-    df.to_csv('analyzer_results.csv', index=False)
+
+    if save_path:
+        df.to_csv(save_path, index=False)
 
     return df

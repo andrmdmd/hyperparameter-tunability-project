@@ -127,32 +127,18 @@ class MultiDatasetHyperparameterOptimization:
         try:
             for dataset_id, (X, y) in self.datasets.items():
                 pipeline = self._create_model_pipeline(model_name, params)
-                try:
-                    cv_results = cross_validate(
-                        pipeline,
-                        X,
-                        y,
-                        cv=5,
-                        scoring={
-                            "accuracy": "accuracy",
-                            "auc": "roc_auc_ovr_weighted",
-                        },
-                        n_jobs=-1,
-                        error_score=np.nan,
-                    )
-                except ValueError:
-                    cv_results = cross_validate(
-                        pipeline,
-                        X,
-                        y,
-                        cv=5,
-                        scoring={
-                            "accuracy": "accuracy",
-                            "auc": "roc_auc",
-                        },
-                        n_jobs=-1,
-                        error_score=np.nan,
-                    )
+                cv_results = cross_validate(
+                    pipeline,
+                    X,
+                    y,
+                    cv=5,
+                    scoring={
+                        "accuracy": "accuracy",
+                        "auc": "roc_auc",
+                    },
+                    n_jobs=-1,
+                    error_score=np.nan,
+                )
 
                 dataset_accuracy = float(np.nanmean(cv_results["test_accuracy"]))
                 dataset_auc = float(np.nanmean(cv_results["test_auc"]))
@@ -242,7 +228,7 @@ class MultiDatasetHyperparameterOptimization:
         elif sampling_method == "grid":
             search_space = self._build_grid_search_space(model_name, n_trials)
             sampler = optuna.samplers.GridSampler(search_space, seed=42)
-        else:  # pragma: no cover - caller guard
+        else:
             raise ValueError(f"Unknown sampling method: {sampling_method}")
 
         study = optuna.create_study(direction="maximize", sampler=sampler)
@@ -308,3 +294,51 @@ class MultiDatasetHyperparameterOptimization:
                 },
                 file_handle,
             )
+    
+    def save_results_json(self, filename: str) -> None:
+
+        import json
+        from pathlib import Path
+
+        summary_results: Dict[str, Any] = {}
+        for key, result in self.results.items():
+            summary_results[key] = {
+                "best_params": result.get("best_params"),
+                "best_scores": result.get("best_scores"),
+                "optimization_metric": result.get("optimization_metric"),
+                "model_name": result.get("model_name"),
+                "sampling_method": result.get("sampling_method"),
+                "dataset_usage_percent": result.get("dataset_usage_percent"),
+            }
+
+        summary_trials: Dict[str, Any] = {}
+        for study_key, trials in self.trial_results.items():
+            summary_trials[study_key] = [
+                {
+                    "trial_number": t.get("trial_number"),
+                    "mean_auc": t.get("mean_auc"),
+                    "mean_accuracy": t.get("mean_accuracy"),
+                    "params": t.get("params"),
+                    "dataset_results": t.get("dataset_results"),
+                    "error": t.get("error"),
+                }
+                for t in trials
+            ]
+
+        payload = {
+            "config": {
+                "openml_ids": self.openml_ids,
+                "sampling_methods": self.sampling_methods,
+                "dataset_usage_percent": self.dataset_usage_percent,
+                "model_names": list(self.ml_models.keys()),
+            },
+            "results": summary_results,
+            "trial_results": summary_trials,
+            "dataset_info": self.get_dataset_info().to_dict(orient="records"),
+            "complete_results_present": hasattr(self, "complete_results"),
+        }
+
+        Path(filename).parent.mkdir(parents=True, exist_ok=True)
+        with open(filename, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
+        print(f"JSON results saved to {filename}")
