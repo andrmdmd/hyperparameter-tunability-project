@@ -24,8 +24,17 @@ def main() -> None:
     optimizer.run_complete_analysis(n_trials=N_TRIALS)
 
     print("Generating convergence plots...")
-    plot_convergence(optimizer, save_path="convergence_plot.png")
-    plot_comparative_convergence(optimizer, save_path="comparative_convergence.png")
+    for metric in ("auc", "accuracy"):
+        plot_convergence(
+            optimizer,
+            save_path=f"convergence_plot_{metric}.png",
+            metric=metric,
+        )
+        plot_comparative_convergence(
+            optimizer,
+            save_path=f"comparative_convergence_{metric}.png",
+            metric=metric,
+        )
 
     tunability_df = analyze_tunability(optimizer)
     print("\nTunability Analysis:")

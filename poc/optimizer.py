@@ -7,7 +7,7 @@ from typing import Any, Dict
 import numpy as np
 import optuna
 import pandas as pd
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_validate
 from sklearn.pipeline import Pipeline
 
 from data_loader import DatasetDict, build_dataset_info, load_datasets
@@ -38,9 +38,16 @@ class MultiDatasetHyperparameterOptimization:
         from sklearn.preprocessing import StandardScaler
 
         model_class = self.ml_models[model_name]["class"]
-        if model_name in ["svm", "logistic"]:
-            return Pipeline([("scaler", StandardScaler()), ("model", model_class(**params))])
-        return Pipeline([( "model", model_class(**params))])
+        model_params = params.copy()
+        if model_name == "svm":
+            model_params = {**model_params, "probability": True}
+
+        if model_name in ["svm", "knn"]:
+            return Pipeline([
+                ("scaler", StandardScaler()),
+                ("model", model_class(**model_params)),
+            ])
+        return Pipeline([("model", model_class(**model_params))])
 
     def _build_grid_search_space(self, model_name: str, n_trials: int) -> Dict[str, list[Any]]:
         """Build grid search space that samples roughly n_trials configurations"""
@@ -113,27 +120,70 @@ class MultiDatasetHyperparameterOptimization:
                     log=param_config.get("log", False),
                 )
 
-        dataset_results: Dict[str, float] = {}
-        scores: list[float] = []
+        dataset_results: Dict[str, Dict[str, float]] = {}
+        auc_scores: list[float] = []
+        accuracy_scores: list[float] = []
 
         try:
             for dataset_id, (X, y) in self.datasets.items():
                 pipeline = self._create_model_pipeline(model_name, params)
-                cv_scores = cross_val_score(
-                    pipeline, X, y, cv=5, scoring="accuracy", n_jobs=-1
-                )
-                dataset_score = float(np.mean(cv_scores))
+                try:
+                    cv_results = cross_validate(
+                        pipeline,
+                        X,
+                        y,
+                        cv=5,
+                        scoring={
+                            "accuracy": "accuracy",
+                            "auc": "roc_auc_ovr_weighted",
+                        },
+                        n_jobs=-1,
+                        error_score=np.nan,
+                    )
+                except ValueError:
+                    cv_results = cross_validate(
+                        pipeline,
+                        X,
+                        y,
+                        cv=5,
+                        scoring={
+                            "accuracy": "accuracy",
+                            "auc": "roc_auc",
+                        },
+                        n_jobs=-1,
+                        error_score=np.nan,
+                    )
 
-                scores.append(dataset_score)
-                dataset_results[str(dataset_id)] = dataset_score
-                trial.set_user_attr(f"dataset_{dataset_id}", dataset_score)
+                dataset_accuracy = float(np.nanmean(cv_results["test_accuracy"]))
+                dataset_auc = float(np.nanmean(cv_results["test_auc"]))
 
-            mean_score = float(np.mean(scores))
+                if np.isnan(dataset_accuracy):
+                    dataset_accuracy = 0.0
+                if np.isnan(dataset_auc):
+                    dataset_auc = 0.0
+
+                accuracy_scores.append(dataset_accuracy)
+                auc_scores.append(dataset_auc)
+                dataset_results[str(dataset_id)] = {
+                    "accuracy": dataset_accuracy,
+                    "auc": dataset_auc,
+                }
+                trial.set_user_attr(f"dataset_{dataset_id}_accuracy", dataset_accuracy)
+                trial.set_user_attr(f"dataset_{dataset_id}_auc", dataset_auc)
+
+            mean_accuracy = float(np.mean(accuracy_scores)) if accuracy_scores else 0.0
+            mean_auc = float(np.mean(auc_scores)) if auc_scores else 0.0
 
             trial_data = {
                 "trial_number": trial.number,
                 "params": params.copy(),
-                "mean_score": mean_score,
+                "mean_score": mean_auc,
+                "mean_auc": mean_auc,
+                "mean_accuracy": mean_accuracy,
+                "mean_metrics": {
+                    "auc": mean_auc,
+                    "accuracy": mean_accuracy,
+                },
                 "dataset_results": dataset_results.copy(),
                 "dataset_usage_percent": self.dataset_usage_percent,
                 "datetime": pd.Timestamp.now(),
@@ -144,20 +194,29 @@ class MultiDatasetHyperparameterOptimization:
             self.trial_results[study_key].append(trial_data)
 
             trial.set_user_attr("dataset_results", dataset_results)
-            trial.set_user_attr("mean_score", mean_score)
+            trial.set_user_attr("mean_score", mean_auc)
+            trial.set_user_attr("mean_auc", mean_auc)
+            trial.set_user_attr("mean_accuracy", mean_accuracy)
             trial.set_user_attr(
                 "dataset_usage_percent", self.dataset_usage_percent
             )
 
-            return mean_score
+            return mean_auc
         except Exception as exc:  # pragma: no cover - safety net
             print(f"Error in trial {trial.number}: {exc}")
             trial_data = {
                 "trial_number": trial.number,
                 "params": params.copy(),
                 "mean_score": 0.0,
+                "mean_auc": 0.0,
+                "mean_accuracy": 0.0,
+                "mean_metrics": {
+                    "auc": 0.0,
+                    "accuracy": 0.0,
+                },
                 "dataset_results": {
-                    str(dataset_id): 0.0 for dataset_id in self.datasets.keys()
+                    str(dataset_id): {"accuracy": 0.0, "auc": 0.0}
+                    for dataset_id in self.datasets.keys()
                 },
                 "dataset_usage_percent": self.dataset_usage_percent,
                 "datetime": pd.Timestamp.now(),
@@ -196,14 +255,21 @@ class MultiDatasetHyperparameterOptimization:
         )
 
         trial_results = self.trial_results.get(study_key, [])
+        best_accuracy = max(
+            (trial_info.get("mean_accuracy") for trial_info in trial_results),
+            default=0.0,
+        )
+        best_scores = {"auc": study.best_value, "accuracy": best_accuracy}
         result = {
             "study": study,
             "trial_results": trial_results,
             "best_params": study.best_params,
             "best_score": study.best_value,
+            "best_scores": best_scores,
             "model_name": model_name,
             "sampling_method": sampling_method,
             "dataset_usage_percent": self.dataset_usage_percent,
+            "optimization_metric": "auc",
         }
         self.results[study_key] = result
         return result

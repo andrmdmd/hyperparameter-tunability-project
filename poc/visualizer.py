@@ -19,15 +19,37 @@ def cumulative_best(scores: list[float]) -> list[float]:
     return best_scores
 
 
+def _mean_metric(trial_info: dict[str, object], metric: str) -> float:
+    key = "mean_auc" if metric == "auc" else "mean_accuracy"
+    value = trial_info.get(key) if isinstance(trial_info, dict) else None
+    return float(value) if isinstance(value, (int, float)) else 0.0
+
+
+def _dataset_metric(trial_info: dict[str, object], dataset_id: str, metric: str) -> float:
+    dataset_results = trial_info.get("dataset_results") if isinstance(trial_info, dict) else None
+    if not isinstance(dataset_results, dict):
+        return 0.0
+    dataset_entry = dataset_results.get(dataset_id)
+    if not isinstance(dataset_entry, dict):
+        return 0.0
+    value = dataset_entry.get(metric)
+    return float(value) if isinstance(value, (int, float)) else 0.0
+
+
 def plot_convergence(
     optimizer: MultiDatasetHyperparameterOptimization,
     model_name: Optional[str] = None,
     sampling_method: Optional[str] = None,
     save_path: Optional[str] = None,
+    metric: str = "auc",
 ) -> None:
     if not hasattr(optimizer, "complete_results"):
         print("No results available. Run optimization first.")
         return
+
+    metric = metric.lower()
+    if metric not in {"auc", "accuracy"}:
+        raise ValueError(f"Unsupported metric '{metric}'. Choose 'auc' or 'accuracy'.")
 
     plt.style.use("seaborn-v0_8")
     sns.set_palette("husl")
@@ -62,14 +84,14 @@ def plot_convergence(
 
             ax = fig.add_subplot(gs[plot_idx])
             trials = [trial_info["trial_number"] for trial_info in trial_results]
-            mean_scores = [trial_info["mean_score"] for trial_info in trial_results]
+            mean_scores = [_mean_metric(trial_info, metric) for trial_info in trial_results]
             best_mean_scores = cumulative_best(mean_scores)
             ax.plot(
                 trials,
                 best_mean_scores,
                 "k-",
                 linewidth=3,
-                label="Best-so-far Average",
+                label=f"Best-so-far {metric.upper()}",
                 alpha=0.9,
             )
 
@@ -77,9 +99,10 @@ def plot_convergence(
             colors = plt.cm.tab10(np.linspace(0, 1, len(dataset_ids)))
             for idx, dataset_id in enumerate(dataset_ids):
                 dataset_scores = [
-                    trial_info["dataset_results"].get(str(dataset_id), 0)
+                    _dataset_metric(trial_info, str(dataset_id), metric)
                     for trial_info in trial_results
                 ]
+
                 best_dataset_scores = cumulative_best(dataset_scores)
                 ax.plot(
                     trials,
@@ -98,13 +121,19 @@ def plot_convergence(
                 fontweight="bold",
             )
             ax.set_xlabel("Iteration Number", fontsize=12)
-            ax.set_ylabel("Accuracy", fontsize=12)
+            ax.set_ylabel(metric.upper(), fontsize=12)
             ax.grid(True, alpha=0.3)
             ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
 
-            best_score = result["best_score"]
+            best_scores = result.get("best_scores") if isinstance(result, dict) else None
+            best_score = (
+                float(best_scores.get(metric))
+                if isinstance(best_scores, dict) and isinstance(best_scores.get(metric), (int, float))
+                else None
+            )
             best_iter = int(np.argmax(best_mean_scores))
-            ax.axhline(y=best_score, color="red", linestyle=":", alpha=0.8)
+            if best_score is not None:
+                ax.axhline(y=best_score, color="red", linestyle=":", alpha=0.8)
             ax.axvline(x=best_iter, color="red", linestyle=":", alpha=0.8)
 
             plot_idx += 1
@@ -122,11 +151,17 @@ def plot_convergence(
 
 
 def plot_comparative_convergence(
-    optimizer: MultiDatasetHyperparameterOptimization, save_path: Optional[str] = None
+    optimizer: MultiDatasetHyperparameterOptimization,
+    save_path: Optional[str] = None,
+    metric: str = "auc",
 ) -> None:
     if not hasattr(optimizer, "complete_results"):
         print("No results available. Run optimization first.")
         return
+
+    metric = metric.lower()
+    if metric not in {"auc", "accuracy"}:
+        raise ValueError(f"Unsupported metric '{metric}'. Choose 'auc' or 'accuracy'.")
 
     valid_models: list[str] = []
     for model_name in optimizer.ml_models:
@@ -169,19 +204,22 @@ def plot_comparative_convergence(
             trials = [trial_info["trial_number"] for trial_info in result["trial_results"]]
             if not trials:
                 continue
-            mean_scores = [trial_info["mean_score"] for trial_info in result["trial_results"]]
+            mean_scores = [
+                _mean_metric(trial_info, metric)
+                for trial_info in result["trial_results"]
+            ]
             cumulative_scores = cumulative_best(mean_scores)
             ax.plot(
                 trials,
                 cumulative_scores,
                 color=sampling_colors.get(sampling_method, "gray"),
                 linewidth=2,
-                label=f"{sampling_method.upper()} Best-so-far",
+                label=f"{sampling_method.upper()} Best-so-far {metric.upper()}",
             )
 
         ax.set_title(f"{model_name.upper()}", fontsize=14, fontweight="bold")
         ax.set_xlabel("Iteration Number", fontsize=12)
-        ax.set_ylabel("Average Accuracy", fontsize=12)
+        ax.set_ylabel(metric.upper(), fontsize=12)
         ax.grid(True, alpha=0.3)
         ax.legend()
         plot_idx += 1
@@ -190,7 +228,7 @@ def plot_comparative_convergence(
         fig.delaxes(axes[index])
 
     plt.suptitle(
-        f"Comparative Convergence Analysis\nDataset Usage: {optimizer.dataset_usage_percent}%",
+        f"Comparative Convergence Analysis ({metric.upper()})\nDataset Usage: {optimizer.dataset_usage_percent}%",
         fontsize=16,
         fontweight="bold",
     )

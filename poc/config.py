@@ -41,32 +41,32 @@ ML_MODELS = {
             "n_neighbors": {"type": "int", "low": 10, "high": 30},  # k
         },
     },
-    # Support Vector Machine
-    "svm": {
-        "class": SVC,
-        "hyperparameters": {
-            "kernel": {"type": "categorical", "choices": ["linear", "rbf", "poly", "sigmoid"]},
-            "C": {"type": "float", "low": 0.002, "high": 920.582, "log": True},  # cost
-            "gamma": {"type": "float", "low": 0.003, "high": 18.195, "log": True},
-            "degree": {"type": "int", "low": 2, "high": 4},
-        },
-    },
+    # # Support Vector Machine
+    # "svm": {
+    #     "class": SVC,
+    #     "hyperparameters": {
+    #         "kernel": {"type": "categorical", "choices": ["linear", "rbf", "poly", "sigmoid"]},
+    #         "C": {"type": "float", "low": 0.002, "high": 920.582, "log": True},  # cost
+    #         "gamma": {"type": "float", "low": 0.003, "high": 18.195, "log": True},
+    #         "degree": {"type": "int", "low": 2, "high": 4},
+    #     },
+    # },
     # XGBoost
-    "xgboost": {
-        "class": XGBClassifier,
-        "hyperparameters": {
-            "n_estimators": {"type": "int", "low": 921, "high": 4551},  # nrounds (rounded from 920.7, 4550.95)
-            "eta": {"type": "float", "low": 0.002, "high": 0.355},  # eta (learning rate)
-            "subsample": {"type": "float", "low": 0.545, "high": 0.958},
-            "booster": {"type": "categorical", "choices": ["gbtree", "gblinear", "dart"]},
-            "max_depth": {"type": "int", "low": 6, "high": 14},  # max_depth
-            "min_child_weight": {"type": "float", "low": 1.295, "high": 6.984},
-            "colsample_bytree": {"type": "float", "low": 0.419, "high": 0.864},
-            "colsample_bylevel": {"type": "float", "low": 0.335, "high": 0.886},
-            "lambda": {"type": "float", "low": 0.008, "high": 29.755},  # lambda (L2 reg)
-            "alpha": {"type": "float", "low": 0.002, "high": 6.105},  # alpha (L1 reg)
-        },
-    },
+    # "xgboost": {
+    #     "class": XGBClassifier,
+    #     "hyperparameters": {
+    #         "n_estimators": {"type": "int", "low": 921, "high": 4551},  # nrounds (rounded from 920.7, 4550.95)
+    #         "eta": {"type": "float", "low": 0.002, "high": 0.355},  # eta (learning rate)
+    #         "subsample": {"type": "float", "low": 0.545, "high": 0.958},
+    #         "booster": {"type": "categorical", "choices": ["gbtree", "gblinear", "dart"]},
+    #         "max_depth": {"type": "int", "low": 6, "high": 14},  # max_depth
+    #         "min_child_weight": {"type": "float", "low": 1.295, "high": 6.984},
+    #         "colsample_bytree": {"type": "float", "low": 0.419, "high": 0.864},
+    #         "colsample_bylevel": {"type": "float", "low": 0.335, "high": 0.886},
+    #         "lambda": {"type": "float", "low": 0.008, "high": 29.755},  # lambda (L2 reg)
+    #         "alpha": {"type": "float", "low": 0.002, "high": 6.105},  # alpha (L1 reg)
+    #     },
+    # },
     # # Gradient Boosting (booster in the table)
     # "gradient_boosting": {
     #     "class": GradientBoostingClassifier,
@@ -83,6 +83,6 @@ ML_MODELS = {
 
 DEFAULT_SAMPLING_METHODS = ["bayesian", "random", "grid"]
 
-DEFAULT_DATASET_USAGE = 5
+DEFAULT_DATASET_USAGE = 10
 
-N_TRIALS = 10
+N_TRIALS = 20
