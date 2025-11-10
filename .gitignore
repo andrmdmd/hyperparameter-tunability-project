@@ -2,3 +2,5 @@ __pycache__/
 results/
 *.pkl
 *.json
+*.png
+*.csv
