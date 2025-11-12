@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import pickle
 import warnings
 from typing import Any, Dict
@@ -62,7 +63,7 @@ class MultiDatasetHyperparameterOptimization:
         # Calculate how many values per parameter to roughly match n_trials
         # For n_params dimensions with k values each: k^n_params ≈ n_trials
         # So k ≈ n_trials^(1/n_params)
-        values_per_param = max(2, int(n_trials ** (1.0 / n_params)))
+        values_per_param = max(2, math.ceil(n_trials ** (1.0 / n_params)))
 
         for param_name, param_config in model_config.items():
             if param_config["type"] == "categorical":
