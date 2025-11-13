@@ -2,3 +2,7 @@ scikit-learn
 pandas
 numpy
 xgboost
+optuna
+matplotlib
+seaborn
+openml

@@ -10,6 +10,7 @@ import optuna
 import pandas as pd
 from sklearn.model_selection import cross_validate
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 from data_loader import DatasetDict, build_dataset_info, load_datasets
 
@@ -36,7 +37,6 @@ class MultiDatasetHyperparameterOptimization:
         self.trial_results: Dict[str, list[dict[str, Any]]] = {}
 
     def _create_model_pipeline(self, model_name: str, params: Dict[str, Any]) -> Pipeline:
-        from sklearn.preprocessing import StandardScaler
 
         model_class = self.ml_models[model_name]["class"]
         model_params = params.copy()
