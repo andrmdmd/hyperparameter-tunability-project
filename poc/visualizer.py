@@ -65,7 +65,7 @@ def plot_convergence(
         print("No data to plot")
         return
 
-    fig = plt.figure(figsize=(16, 5 * n_plots))
+    fig = plt.figure(figsize=(6, 5 * n_plots))
     gs = GridSpec(n_plots, 1, figure=fig)
 
     plot_idx = 0
