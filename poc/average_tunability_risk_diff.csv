@@ -1,0 +1,10 @@
+model,sampling_method,avg_tunability_risk_diff
+decision_tree,bayesian,0.01240149845691384
+decision_tree,grid,0.01734754234842938
+decision_tree,random,0.016731461461472
+knn,bayesian,0.00024220906836368
+knn,grid,0.00037525324210552
+knn,random,0.00036779895566336
+random_forest,bayesian,0.013717326016594
+random_forest,grid,0.018620802673447658
+random_forest,random,0.00601359416639124

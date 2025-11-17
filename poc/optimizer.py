@@ -295,7 +295,7 @@ class MultiDatasetHyperparameterOptimization:
                 },
                 file_handle,
             )
-    
+  
     def save_results_json(self, filename: str) -> None:
 
         import json
