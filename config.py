@@ -1,4 +1,4 @@
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
@@ -15,32 +15,32 @@ OPENML_DATASETS = [
 
 ML_MODELS = {
     # Decision Tree (rpart in the table)
-    # "decision_tree": {
-    #     "class": DecisionTreeClassifier,
-    #     "hyperparameters": {
-    #         "ccp_alpha": {"type": "float", "low": 0.0, "high": 0.008},  # cp (complexity parameter for pruning)
-    #         "max_depth": {"type": "int", "low": 12, "high": 27},  # maxdepth
-    #         "min_samples_leaf": {"type": "int", "low": 4, "high": 42},  # minbucket
-    #         "min_samples_split": {"type": "int", "low": 5, "high": 49},  # minsplit
-    #     },
-    # },
-    # # Random Forest (ranger in the table)
-    # "random_forest": {
-    #     "class": RandomForestClassifier,
-    #     "hyperparameters": {
-    #         "n_estimators": {"type": "int", "low": 206, "high": 1740},  # num.trees
-    #         "bootstrap": {"type": "categorical", "choices": [True, False]},  # replace
-    #         "max_features": {"type": "float", "low": 0.323, "high": 0.974},  # sample.fraction
-    #         "min_samples_split": {"type": "float", "low": 0.007, "high": 0.513},  # min.node.size
-    #     },
-    # },
-    # # K-Nearest Neighbors
-    # "knn": {
-    #     "class": KNeighborsClassifier,
-    #     "hyperparameters": {
-    #         "n_neighbors": {"type": "int", "low": 10, "high": 30},  # k
-    #     },
-    # },
+    "decision_tree": {
+        "class": DecisionTreeClassifier,
+        "hyperparameters": {
+            "ccp_alpha": {"type": "float", "low": 0.0, "high": 0.008},  # cp (complexity parameter for pruning)
+            "max_depth": {"type": "int", "low": 12, "high": 27},  # maxdepth
+            "min_samples_leaf": {"type": "int", "low": 4, "high": 42},  # minbucket
+            "min_samples_split": {"type": "int", "low": 5, "high": 49},  # minsplit
+        },
+    },
+    # Random Forest (ranger in the table)
+    "random_forest": {
+        "class": RandomForestClassifier,
+        "hyperparameters": {
+            "n_estimators": {"type": "int", "low": 206, "high": 1740},  # num.trees
+            "bootstrap": {"type": "categorical", "choices": [True, False]},  # replace
+            "max_features": {"type": "float", "low": 0.323, "high": 0.974},  # sample.fraction
+            "min_samples_split": {"type": "float", "low": 0.007, "high": 0.513},  # min.node.size
+        },
+    },
+    # K-Nearest Neighbors
+    "knn": {
+        "class": KNeighborsClassifier,
+        "hyperparameters": {
+            "n_neighbors": {"type": "int", "low": 10, "high": 30},  # k
+        },
+    },
     # # # Support Vector Machine
     # # "svm": {
     # #     "class": SVC,

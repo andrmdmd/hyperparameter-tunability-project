@@ -19,13 +19,13 @@ def cumulative_best(scores: list[float]) -> list[float]:
     return best_scores
 
 
-def _mean_metric(trial_info: dict[str, object], metric: str) -> float:
+def mean_metric(trial_info: dict[str, object], metric: str) -> float:
     key = "mean_auc" if metric == "auc" else "mean_accuracy"
     value = trial_info.get(key) if isinstance(trial_info, dict) else None
     return float(value) if isinstance(value, (int, float)) else 0.0
 
 
-def _dataset_metric(trial_info: dict[str, object], dataset_id: str, metric: str) -> float:
+def dataset_metric(trial_info: dict[str, object], dataset_id: str, metric: str) -> float:
     dataset_results = trial_info.get("dataset_results") if isinstance(trial_info, dict) else None
     if not isinstance(dataset_results, dict):
         return 0.0
@@ -85,7 +85,7 @@ def plot_convergence(
 
             ax = fig.add_subplot(gs[plot_idx])
             trials = [trial_info["trial_number"] for trial_info in trial_results]
-            mean_scores = [_mean_metric(trial_info, metric) for trial_info in trial_results]
+            mean_scores = [mean_metric(trial_info, metric) for trial_info in trial_results]
             best_mean_scores = cumulative_best(mean_scores)
             ax.plot(
                 trials,
@@ -100,7 +100,7 @@ def plot_convergence(
             colors = plt.cm.tab10(np.linspace(0, 1, len(dataset_ids)))
             for idx, dataset_id in enumerate(dataset_ids):
                 dataset_scores = [
-                    _dataset_metric(trial_info, str(dataset_id), metric)
+                    dataset_metric(trial_info, str(dataset_id), metric)
                     for trial_info in trial_results
                 ]
 
@@ -209,7 +209,7 @@ def plot_comparative_convergence(
             if not trials:
                 continue
             mean_scores = [
-                _mean_metric(trial_info, metric)
+                mean_metric(trial_info, metric)
                 for trial_info in result["trial_results"]
             ]
             cumulative_scores = cumulative_best(mean_scores)

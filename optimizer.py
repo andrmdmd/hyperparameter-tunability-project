@@ -4,7 +4,6 @@ import math
 import pickle
 import warnings
 from typing import Any, Dict
-
 import numpy as np
 import optuna
 import pandas as pd
@@ -15,7 +14,6 @@ from sklearn.preprocessing import StandardScaler
 from data_loader import DatasetDict, build_dataset_info, load_datasets
 
 warnings.filterwarnings("ignore")
-
 
 class MultiDatasetHyperparameterOptimization:
     def __init__(
@@ -51,11 +49,10 @@ class MultiDatasetHyperparameterOptimization:
         return Pipeline([("model", model_class(**model_params))])
 
     def _build_grid_search_space(self, model_name: str, n_trials: int) -> Dict[str, list[Any]]:
-        """Build grid search space that samples roughly n_trials configurations"""
+
         search_space: Dict[str, list[Any]] = {}
         model_config = self.ml_models[model_name]["hyperparameters"]
         
-        # Count how many parameters we have
         n_params = len(model_config)
         if n_params == 0:
             return search_space
@@ -81,7 +78,6 @@ class MultiDatasetHyperparameterOptimization:
                     search_space[param_name] = list(param_config["choices"])
                 else:
                     if param_config.get("log", False):
-                        # For log scale, use logspace
                         values = np.logspace(
                             np.log10(param_config["low"]),
                             np.log10(param_config["high"]),
@@ -189,7 +185,7 @@ class MultiDatasetHyperparameterOptimization:
             )
 
             return mean_auc
-        except Exception as exc:  # pragma: no cover - safety net
+        except Exception as exc:
             print(f"Error in trial {trial.number}: {exc}")
             trial_data = {
                 "trial_number": trial.number,
@@ -273,10 +269,6 @@ class MultiDatasetHyperparameterOptimization:
         self.complete_results = all_results
         return all_results
 
-    def get_dataset_info(self) -> pd.DataFrame:
-        info = build_dataset_info(self.datasets, self.dataset_usage_percent)
-        return pd.DataFrame(info)
-
     def save_results(self, filename: str) -> None:
         with open(filename, "wb") as file_handle:
             pickle.dump(
@@ -285,7 +277,7 @@ class MultiDatasetHyperparameterOptimization:
                     "trial_results": self.trial_results,
                     "complete_results": getattr(self, "complete_results", None),
                     "datasets": self.datasets,
-                    "dataset_info": self.get_dataset_info(),
+                    "dataset_info": build_dataset_info(self.datasets, self.dataset_usage_percent),
                     "config": {
                         "openml_ids": self.openml_ids,
                         "ml_models": self.ml_models,
@@ -295,51 +287,3 @@ class MultiDatasetHyperparameterOptimization:
                 },
                 file_handle,
             )
-  
-    def save_results_json(self, filename: str) -> None:
-
-        import json
-        from pathlib import Path
-
-        summary_results: Dict[str, Any] = {}
-        for key, result in self.results.items():
-            summary_results[key] = {
-                "best_params": result.get("best_params"),
-                "best_scores": result.get("best_scores"),
-                "optimization_metric": result.get("optimization_metric"),
-                "model_name": result.get("model_name"),
-                "sampling_method": result.get("sampling_method"),
-                "dataset_usage_percent": result.get("dataset_usage_percent"),
-            }
-
-        summary_trials: Dict[str, Any] = {}
-        for study_key, trials in self.trial_results.items():
-            summary_trials[study_key] = [
-                {
-                    "trial_number": t.get("trial_number"),
-                    "mean_auc": t.get("mean_auc"),
-                    "mean_accuracy": t.get("mean_accuracy"),
-                    "params": t.get("params"),
-                    "dataset_results": t.get("dataset_results"),
-                    "error": t.get("error"),
-                }
-                for t in trials
-            ]
-
-        payload = {
-            "config": {
-                "openml_ids": self.openml_ids,
-                "sampling_methods": self.sampling_methods,
-                "dataset_usage_percent": self.dataset_usage_percent,
-                "model_names": list(self.ml_models.keys()),
-            },
-            "results": summary_results,
-            "trial_results": summary_trials,
-            "dataset_info": self.get_dataset_info().to_dict(orient="records"),
-            "complete_results_present": hasattr(self, "complete_results"),
-        }
-
-        Path(filename).parent.mkdir(parents=True, exist_ok=True)
-        with open(filename, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh, indent=2)
-        print(f"JSON results saved to {filename}")

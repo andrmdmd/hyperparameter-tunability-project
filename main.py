@@ -1,5 +1,4 @@
 from __future__ import annotations
-from fileinput import filename
 from pathlib import Path
 
 from analyzer import analyze_tunability
@@ -50,7 +49,6 @@ def main() -> None:
         print(tunability_df)
 
         optimizer.save_results(f"results/usage_{dataset_usage}/optimization_results.pkl")
-        #optimizer.save_results_json(f"results/usage_{dataset_usage}/optimization_results.json")
         print("Results saved successfully!")
 
 
