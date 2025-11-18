@@ -1,48 +1,56 @@
-import os
-import pandas as pd
-from configs.datasets import load_dataset
-from configs.model_spaces import MODEL_SPACES
-from tuning.grid_search import run_grid_search
-from tuning.random_search import run_random_search
+from __future__ import annotations
+from pathlib import Path
 
-DATASETS = ["iris", "wine", "cancer"]
-METHODS = ["xgboost", "random_forest", "logistic_regression"]
-SAMPLERS = {
-    "grid": run_grid_search,
-    "random": run_random_search,
-}
+from analyzer import analyze_tunability
+from config import (
+    DEFAULT_DATASET_USAGES,
+    DEFAULT_SAMPLING_METHODS,
+    ML_MODELS,
+    OPENML_DATASETS,
+    N_TRIALS,
+)
+from optimizer import MultiDatasetHyperparameterOptimization
+from visualizer import plot_comparative_convergence, plot_convergence
 
-results = []
 
-for ds in DATASETS:
-    X_train, X_test, y_train, y_test = load_dataset(ds)
-    for method in METHODS:
-        for sampler_name, sampler_fn in SAMPLERS.items():
-            model_info = MODEL_SPACES[method]
-            params, score = sampler_fn(
-                model_info["model"],
-                model_info["params"],
-                X_train,
-                y_train,
-                metric="accuracy",
+def main() -> None:
+
+    Path("results").mkdir(parents=True, exist_ok=True)
+
+    for dataset_usage in DEFAULT_DATASET_USAGES:
+
+        Path(f"results/usage_{dataset_usage}").mkdir(parents=True, exist_ok=True)
+
+        optimizer = MultiDatasetHyperparameterOptimization(
+            openml_ids=OPENML_DATASETS,
+            ml_models=ML_MODELS,
+            sampling_methods=DEFAULT_SAMPLING_METHODS,
+            dataset_usage_percent=dataset_usage,
+        )
+
+        print(f"Running optimization for dataset usage {dataset_usage}%...")
+        optimizer.run_complete_analysis(n_trials=N_TRIALS)
+
+        print("Generating convergence plots...")
+        for metric in ("auc", "accuracy"):
+            plot_convergence(
+                optimizer,
+                save_path=f"results/usage_{dataset_usage}/convergence_plot_{metric}.png",
+                metric=metric,
+            )
+            plot_comparative_convergence(
+                optimizer,
+                save_path=f"results/usage_{dataset_usage}/comparative_convergence_{metric}.png",
+                metric=metric,
             )
 
-            best_model = model_info["model"](**params)
-            best_model.fit(X_train, y_train)
-            test_score = best_model.score(X_test, y_test)
+        tunability_df = analyze_tunability(optimizer, save_path=f"results/usage_{dataset_usage}/tunability_analysis.csv")
+        print("\nTunability Analysis:")
+        print(tunability_df)
 
-            results.append(
-                {
-                    "dataset": ds,
-                    "method": method,
-                    "sampler": sampler_name,
-                    "best_params": params,
-                    "best_score": score,
-                    "test_score": test_score,
-                }
-            )
-            print(f"[{ds}] {method}-{sampler_name}: {score:.3f} (test: {test_score:.3f})")
+        optimizer.save_results(f"results/usage_{dataset_usage}/optimization_results.pkl")
+        print("Results saved successfully!")
 
-os.makedirs("results", exist_ok=True)
-results_df = pd.DataFrame(results)
-results_df.to_csv("results/tuning_results.csv", index=False)
+
+if __name__ == "__main__":
+    main()
