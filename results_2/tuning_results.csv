@@ -1,2 +1,0 @@
-method,best_params,avg_cv_score_across_datasets,avg_test_score_across_datasets,per_dataset_test_scores
-logistic_regression,"{'model__C': 1, 'model__penalty': 'l2', 'model__solver': 'liblinear'}",0.9133567861203187,0.917013718655324,"[0.8515712969597707, 0.9824561403508771]"
